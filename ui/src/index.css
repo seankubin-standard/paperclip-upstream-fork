@@ -293,7 +293,11 @@
   h1,
   h2,
   h3 {
-    text-wrap: balance;
+    /* `balance` equalizes line lengths, which makes long dynamic titles
+       (e.g. issue titles on mobile) wrap far short of the column width.
+       `pretty` only avoids orphan words; unsupported browsers fall back
+       to normal wrapping. */
+    text-wrap: pretty;
   }
   /* Prevent double-tap-to-zoom on interactive elements for mobile */
   a,
