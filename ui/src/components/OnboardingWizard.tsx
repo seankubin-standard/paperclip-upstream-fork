@@ -832,7 +832,7 @@ export function OnboardingWizard() {
                     <div>
                       <h3 className="font-medium">
                         {step === 3
-                          ? "Create your team lead"
+                          ? "Customize your agent"
                           : step === 4
                             ? "Connect a model"
                             : "Review"}
@@ -973,9 +973,9 @@ export function OnboardingWizard() {
                       <Building2 className="h-5 w-5 text-muted-foreground" />
                     </div>
                     <div>
-                      <h3 className="font-medium">Name your company</h3>
+                      <h3 className="font-medium">What is the name of your practice?</h3>
                       <p className="text-xs text-muted-foreground">
-                        What should we call your company?
+                        This will become Dr. Clippy's Headquarters — Choose something your team will recognize
                       </p>
                     </div>
                   </div>
@@ -1212,12 +1212,12 @@ export function OnboardingWizard() {
                 </div>
               )}
 
-              {/* Step 3: Create your team lead — name only (capsule above) */}
+              {/* Step 3: Customize your agent — name only (capsule above) */}
               {step === 3 && (
                 <div className="space-y-5">
                   <div>
                     <label className="text-xs text-muted-foreground mb-1 block">
-                      Name
+                      Default Name: Dr. Clippy (CEO)
                     </label>
                     <input
                       className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
