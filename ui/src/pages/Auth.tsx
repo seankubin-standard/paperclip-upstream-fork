@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "@/lib/router";
 import { authApi } from "../api/auth";
+import { healthApi } from "../api/health";
 import { queryKeys } from "../lib/queryKeys";
 import { getRememberedInvitePath } from "../lib/invite-memory";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,20 @@ export function AuthPage() {
     queryKey: queryKeys.auth.session,
     queryFn: () => authApi.getSession(),
     retry: false,
+  });
+
+  const { data: health } = useQuery({
+    queryKey: queryKeys.health,
+    queryFn: () => healthApi.get(),
+    retry: false,
+  });
+  const hasMicrosoftSso = health?.socialProviders?.includes("microsoft") ?? false;
+
+  const microsoftMutation = useMutation({
+    mutationFn: () => authApi.signInMicrosoft(nextPath),
+    onError: (err) => {
+      setError(err instanceof Error ? err.message : "Microsoft sign-in failed");
+    },
   });
 
   useEffect(() => {
@@ -96,6 +111,35 @@ export function AuthPage() {
               ? "Use your email and password to access this instance."
               : "Create an account for this instance. Email confirmation is not required in v1."}
           </p>
+
+          {hasMicrosoftSso && mode === "sign_in" && (
+            <div className="mt-5">
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full flex items-center gap-3"
+                disabled={microsoftMutation.isPending}
+                onClick={() => microsoftMutation.mutate()}
+              >
+                {/* Microsoft logo SVG */}
+                <svg width="16" height="16" viewBox="0 0 21 21" aria-hidden="true" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="1" y="1" width="9" height="9" fill="#F25022" />
+                  <rect x="11" y="1" width="9" height="9" fill="#7FBA00" />
+                  <rect x="1" y="11" width="9" height="9" fill="#00A4EF" />
+                  <rect x="11" y="11" width="9" height="9" fill="#FFB900" />
+                </svg>
+                {microsoftMutation.isPending ? "Redirecting…" : "Sign in with Microsoft 365"}
+              </Button>
+              <div className="relative mt-5 mb-1">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-border" />
+                </div>
+                <div className="relative flex justify-center">
+                  <span className="bg-background px-2 text-xs text-muted-foreground">or continue with email</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           <form
             className="mt-6 space-y-4"

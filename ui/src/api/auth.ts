@@ -165,6 +165,23 @@ export const authApi = {
     await authPost("/sign-up/email", input);
   },
 
+  signInMicrosoft: async (callbackURL: string): Promise<void> => {
+    const res = await fetch("/api/auth/sign-in/social", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ provider: "microsoft", callbackURL }),
+    });
+    const payload = await res.json().catch(() => null);
+    if (!res.ok) {
+      throw extractAuthError(payload as AuthErrorBody, res.status);
+    }
+    const url = (payload as { url?: string } | null)?.url;
+    if (url) {
+      window.location.href = url;
+    }
+  },
+
   getProfile: async (): Promise<CurrentUserProfile> => {
     const res = await fetch("/api/auth/profile", {
       credentials: "include",

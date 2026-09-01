@@ -17,6 +17,14 @@ import {
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { serverVersion } from "../version.js";
 
+function resolveEnabledSocialProviders(): string[] {
+  const providers: string[] = [];
+  if (process.env.MICROSOFT_CLIENT_ID?.trim() && process.env.MICROSOFT_CLIENT_SECRET?.trim()) {
+    providers.push("microsoft");
+  }
+  return providers;
+}
+
 function shouldExposeFullHealthDetails(
   actorType: "none" | "board" | "agent" | null | undefined,
   deploymentMode: DeploymentMode,
@@ -203,6 +211,7 @@ export function healthRoutes(
       : undefined;
     const warnings = databaseBackup?.warnings.length ? databaseBackup.warnings : undefined;
 
+    const socialProviders = resolveEnabledSocialProviders();
     if (!exposeFullDetails) {
       const redactedDatabaseBackup = databaseBackup ? redactedDatabaseBackupHealth(databaseBackup) : undefined;
       const redactedWarnings = redactedDatabaseBackup?.warnings.length ? redactedDatabaseBackup.warnings : undefined;
@@ -212,6 +221,7 @@ export function healthRoutes(
         deploymentExposure: opts.deploymentExposure,
         bootstrapStatus,
         bootstrapInviteActive,
+        ...(socialProviders.length > 0 ? { socialProviders } : {}),
         ...(redactedDatabaseBackup ? { databaseBackup: redactedDatabaseBackup } : {}),
         ...(redactedWarnings ? { warnings: redactedWarnings } : {}),
         ...(devServer ? { devServer } : {}),
@@ -228,6 +238,7 @@ export function healthRoutes(
       authReady: opts.authReady,
       bootstrapStatus,
       bootstrapInviteActive,
+      ...(socialProviders.length > 0 ? { socialProviders } : {}),
       features: {
         companyDeletionEnabled: opts.companyDeletionEnabled,
       },

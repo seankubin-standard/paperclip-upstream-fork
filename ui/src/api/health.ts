@@ -22,6 +22,7 @@ export type HealthStatus = {
   authReady?: boolean;
   bootstrapStatus?: "ready" | "bootstrap_pending";
   bootstrapInviteActive?: boolean;
+  socialProviders?: string[];
   features?: {
     companyDeletionEnabled?: boolean;
   };

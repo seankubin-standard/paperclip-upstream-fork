@@ -162,6 +162,15 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     publicUrl,
   });
 
+  const microsoftClientId = process.env.MICROSOFT_CLIENT_ID?.trim();
+  const microsoftClientSecret = process.env.MICROSOFT_CLIENT_SECRET?.trim();
+  // MICROSOFT_TENANT_ID defaults to "common" for multi-tenant app (any practice's Entra ID).
+  // Set to a specific tenant GUID only for single-tenant/single-practice deployments.
+  const microsoftTenantId = process.env.MICROSOFT_TENANT_ID?.trim() || "common";
+  const microsoftSocialProvider = microsoftClientId && microsoftClientSecret
+    ? { microsoft: { clientId: microsoftClientId, clientSecret: microsoftClientSecret, tenantId: microsoftTenantId, disableProfilePhoto: true } }
+    : {};
+
   const authConfig = {
     baseURL: baseUrl,
     secret,
@@ -180,6 +189,7 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
       requireEmailVerification: false,
       disableSignUp: config.authDisableSignUp,
     },
+    socialProviders: microsoftSocialProvider,
     rateLimit: buildBetterAuthRateLimitOptions({
       deploymentMode: config.deploymentMode,
       deploymentExposure: config.deploymentExposure,
