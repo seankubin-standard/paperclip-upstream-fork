@@ -1,6 +1,7 @@
 import type { Request, RequestHandler } from "express";
 import type { IncomingHttpHeaders } from "node:http";
 import { betterAuth, type Auth } from "better-auth";
+import { twoFactor } from "better-auth/plugins";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { toNodeHandler } from "better-auth/node";
 import type { Db } from "@paperclipai/db";
@@ -8,10 +9,12 @@ import {
   authAccounts,
   authSessions,
   authUsers,
+  authTwoFactors,
   authVerifications,
 } from "@paperclipai/db";
 import type { Config } from "../config.js";
 import { resolvePaperclipInstanceId } from "../home-paths.js";
+import { sendEmail, buildPasswordResetEmail } from "./email.js";
 
 export type BetterAuthSessionUser = {
   id: string;
@@ -171,6 +174,8 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     ? { microsoft: { clientId: microsoftClientId, clientSecret: microsoftClientSecret, tenantId: microsoftTenantId, disableProfilePhoto: true } }
     : {};
 
+  const appName = process.env.APP_NAME?.trim() || "Dr. Clippy";
+
   const authConfig = {
     baseURL: baseUrl,
     secret,
@@ -182,13 +187,27 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
         session: authSessions,
         account: authAccounts,
         verification: authVerifications,
+        twoFactor: authTwoFactors,
       },
     }),
     emailAndPassword: {
       enabled: true,
       requireEmailVerification: false,
       disableSignUp: config.authDisableSignUp,
+      async sendResetPassword(data: { user: { name: string; email: string }; url: string }) {
+        const email = buildPasswordResetEmail({
+          userName: data.user.name,
+          resetUrl: data.url,
+          appName,
+        });
+        await sendEmail({ to: data.user.email, ...email });
+      },
     },
+    plugins: [
+      twoFactor({
+        issuer: appName,
+      }),
+    ],
     socialProviders: microsoftSocialProvider,
     rateLimit: buildBetterAuthRateLimitOptions({
       deploymentMode: config.deploymentMode,

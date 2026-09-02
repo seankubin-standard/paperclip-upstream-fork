@@ -66,3 +66,7 @@ tests/storybook-visual/playwright-report/
 .superpowers/
 .claude/worktrees/
 .herenow
+
+# Install-time secrets (email credentials, etc.) — never commit
+.secrets/
+.env.local
