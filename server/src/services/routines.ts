@@ -178,7 +178,11 @@ function getZonedMinuteFormatter(timeZone: string) {
   if (!formatter) {
     formatter = new Intl.DateTimeFormat("en-US", {
       timeZone,
-      hour12: false,
+      // hourCycle must be pinned to h23 explicitly: `hour12: false` resolves
+      // to the h24 cycle on some ICU versions (node 20 renders midnight as
+      // "24"), which makes every midnight-hour cron unmatchable and persists
+      // schedule triggers with nextRunAt=null that never fire. See STA-7731.
+      hourCycle: "h23",
       year: "numeric",
       month: "numeric",
       day: "numeric",
@@ -203,7 +207,9 @@ function getZonedMinuteParts(date: Date, timeZone: string) {
     year: Number(map.year),
     month: Number(map.month),
     day: Number(map.day),
-    hour: Number(map.hour),
+    // % 24 guards against h24-cycle formatters ("24" at midnight) in case a
+    // future ICU/option change reintroduces one; cron hour fields are 0-23.
+    hour: Number(map.hour) % 24,
     minute: Number(map.minute),
     weekday,
   };
@@ -2346,6 +2352,14 @@ export function routineService(
         const error = validateCron(input.cronExpression);
         if (error) throw unprocessable(error);
         nextRunAt = nextCronTickInTimeZone(input.cronExpression, timeZone, new Date());
+        // A schedule trigger with no computable next tick would be accepted
+        // as healthy (enabled, active) but invisible to the dispatcher's
+        // isNotNull(nextRunAt) due-query forever. Reject it instead (STA-7731).
+        if (!nextRunAt) {
+          throw unprocessable(
+            `Cron expression "${input.cronExpression}" never resolves to a future run in timezone ${timeZone}`,
+          );
+        }
       }
 
       if (input.kind === "webhook") {
@@ -2425,6 +2439,13 @@ export function routineService(
         }
         if (cronExpression && timezone) {
           nextRunAt = nextCronTickInTimeZone(cronExpression, timezone, new Date());
+          // Same guard as createTrigger: never persist a schedule trigger the
+          // dispatcher's isNotNull(nextRunAt) due-query can't see (STA-7731).
+          if (!nextRunAt) {
+            throw unprocessable(
+              `Cron expression "${cronExpression}" never resolves to a future run in timezone ${timezone}`,
+            );
+          }
         }
         if ((patch.enabled ?? existing.enabled) === true) {
           assertScheduleCompatibleVariables(routine.variables ?? []);
