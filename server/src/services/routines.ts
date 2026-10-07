@@ -247,6 +247,26 @@ export function nextCronTickInTimeZone(expression: string, timeZone: string, aft
   return null;
 }
 
+/**
+ * Resolve the `nextRunAt` to persist for a schedule trigger, refusing to
+ * return null.
+ *
+ * `validateCron` is syntax-only, so well-formed but unschedulable expressions
+ * (`0 0 30 2 *` — February 30th) pass it. Persisting the resulting null would
+ * create a trigger the dispatcher's due-query can never see (it filters on
+ * `isNotNull(nextRunAt)`) while every operator surface still reports the
+ * routine active and the trigger enabled. Fail the write instead (STA-7731).
+ */
+export function computeScheduleNextRunAt(expression: string, timeZone: string, after: Date) {
+  const nextRunAt = nextCronTickInTimeZone(expression, timeZone, after);
+  if (!nextRunAt) {
+    throw unprocessable(
+      `Cron expression "${expression.trim()}" never resolves to a future run in timezone ${timeZone}`,
+    );
+  }
+  return nextRunAt;
+}
+
 function isSubHourlyCronExpression(expression: string, timeZone: string, after: Date) {
   const firstTick = nextCronTickInTimeZone(expression, timeZone, after);
   if (!firstTick) return false;
@@ -2351,15 +2371,7 @@ export function routineService(
         assertTimeZone(timeZone);
         const error = validateCron(input.cronExpression);
         if (error) throw unprocessable(error);
-        nextRunAt = nextCronTickInTimeZone(input.cronExpression, timeZone, new Date());
-        // A schedule trigger with no computable next tick would be accepted
-        // as healthy (enabled, active) but invisible to the dispatcher's
-        // isNotNull(nextRunAt) due-query forever. Reject it instead (STA-7731).
-        if (!nextRunAt) {
-          throw unprocessable(
-            `Cron expression "${input.cronExpression}" never resolves to a future run in timezone ${timeZone}`,
-          );
-        }
+        nextRunAt = computeScheduleNextRunAt(input.cronExpression, timeZone, new Date());
       }
 
       if (input.kind === "webhook") {
@@ -2438,14 +2450,7 @@ export function routineService(
           timezone = patch.timezone;
         }
         if (cronExpression && timezone) {
-          nextRunAt = nextCronTickInTimeZone(cronExpression, timezone, new Date());
-          // Same guard as createTrigger: never persist a schedule trigger the
-          // dispatcher's isNotNull(nextRunAt) due-query can't see (STA-7731).
-          if (!nextRunAt) {
-            throw unprocessable(
-              `Cron expression "${cronExpression}" never resolves to a future run in timezone ${timezone}`,
-            );
-          }
+          nextRunAt = computeScheduleNextRunAt(cronExpression, timezone, new Date());
         }
         if ((patch.enabled ?? existing.enabled) === true) {
           assertScheduleCompatibleVariables(routine.variables ?? []);

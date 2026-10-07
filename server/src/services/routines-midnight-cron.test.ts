@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { nextCronTickInTimeZone } from "./routines.js";
+import { HttpError } from "../errors.js";
+import { computeScheduleNextRunAt, nextCronTickInTimeZone } from "./routines.js";
 
 // STA-7731: on h24-cycle ICU builds (node 20 with `hour12: false`), midnight
 // formats as hour "24", so any cron whose hour field resolves to 0 never
@@ -64,5 +65,30 @@ describe("nextCronTickInTimeZone midnight-hour crons (STA-7731)", () => {
     expect(next).not.toBeNull();
     // 00:30 at UTC-1 is 01:30 UTC.
     expect(next!.toISOString()).toBe("2026-10-05T01:30:00.000Z");
+  });
+});
+
+// The write-path guard that backs the formatter fix: even with a correct
+// formatter, a syntactically valid cron can be unschedulable, and persisting
+// its null nextRunAt recreates the same invisible-forever trigger.
+describe("computeScheduleNextRunAt (STA-7731)", () => {
+  it("returns the next tick for a schedulable midnight cron", () => {
+    const next = computeScheduleNextRunAt("30 0 * * *", "UTC", new Date("2026-10-04T12:00:00Z"));
+    expect(next.toISOString()).toBe("2026-10-05T00:30:00.000Z");
+  });
+
+  // Generous timeout, and exactly one call: reaching the "never fires" verdict
+  // means exhausting the full 366*24*60*5 minute-scan, which takes ~1 minute.
+  it("rejects a well-formed cron that can never fire", { timeout: 180_000 }, () => {
+    let caught: unknown;
+    try {
+      // February 30th: valid cron syntax, no such date.
+      computeScheduleNextRunAt("0 0 30 2 *", "UTC", new Date("2026-10-04T12:00:00Z"));
+    } catch (err) {
+      caught = err;
+    }
+    expect(caught).toBeInstanceOf(HttpError);
+    expect((caught as HttpError).status).toBe(422);
+    expect((caught as HttpError).message).toContain("never resolves to a future run");
   });
 });

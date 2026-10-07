@@ -1208,7 +1208,13 @@ function readZonedDateParts(startsAt: string, timeZone: string) {
     if (Number.isNaN(date.getTime())) return null;
     const formatter = new Intl.DateTimeFormat("en-US", {
       timeZone,
-      hour12: false,
+      // h23, not `hour12: false` — the latter is implementation-defined and
+      // resolves to h24 on some ICU builds, where midnight renders as "24".
+      // `hour` below is emitted straight into a generated cron expression, so
+      // an h24 reading would import a legacy midnight recurrence as cron hour
+      // 24: out of range, and a trigger that can never fire. Same root cause
+      // as the routines formatter. See STA-7731.
+      hourCycle: "h23",
       weekday: "long",
       month: "numeric",
       day: "numeric",
@@ -1224,7 +1230,9 @@ function readZonedDateParts(startsAt: string, timeZone: string) {
     const weekday = WEEKDAY_TO_CRON[parts.weekday?.toLowerCase() ?? ""];
     const month = Number(parts.month);
     const day = Number(parts.day);
-    const hour = Number(parts.hour);
+    // % 24 for the same reason the routines formatter normalizes: fold a "24"
+    // from an h24-cycle formatter back to the 0 that cron hour fields expect.
+    const hour = Number(parts.hour) % 24;
     const minute = Number(parts.minute);
     if (!weekday || !Number.isFinite(month) || !Number.isFinite(day) || !Number.isFinite(hour) || !Number.isFinite(minute)) {
       return null;
